@@ -13,7 +13,6 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "./App.css";
 
 function App() {
-  // Base server URL (adjust as needed)
   const defaultServerUrl = "http://192.168.4.83:5279";
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [customServerUrl, setCustomServerUrl] = useState("");
