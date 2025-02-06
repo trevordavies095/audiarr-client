@@ -1,88 +1,105 @@
 import React, { useEffect, useState } from "react";
-import { Container, Row, Col, Button, Form, Table, Card } from "react-bootstrap";
+import {
+  Container,
+  Row,
+  Col,
+  Card,
+  ListGroup,
+  Table,
+  Button,
+  Form,
+} from "react-bootstrap";
+import "bootstrap/dist/css/bootstrap.min.css";
 import "./App.css";
 
 function App() {
-  const defaultServerUrl = "http://192.168.4.83:5279"; // update port if needed
+  // Base server URL (adjust as needed)
+  const defaultServerUrl = "http://192.168.4.83:5279";
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
-  const [tracks, setTracks] = useState([]);
-  const [serverFound, setServerFound] = useState(true);
   const [customServerUrl, setCustomServerUrl] = useState("");
+  const [serverFound, setServerFound] = useState(true);
+
+  // New state for artists and albums
+  const [artists, setArtists] = useState([]);
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [albums, setAlbums] = useState([]);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+
+  // For playback tracking
   const [audioSrc, setAudioSrc] = useState("");
   const [playingTrackId, setPlayingTrackId] = useState(null);
-  const [hoveredTrackId, setHoveredTrackId] = useState(null);
 
+  // Fetch artists on component mount or when serverUrl changes
   useEffect(() => {
-    fetchTracks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchArtists();
   }, [serverUrl]);
 
-  const sortTracks = (tracks) => {
-    // Make a shallow copy using slice() so we don't mutate the original array.
-    return tracks.slice().sort((a, b) => {
-      // Compare by artist name (alphabetically, case-insensitive)
-      const artistCompare = a.artist.localeCompare(b.artist, undefined, { sensitivity: "base" });
-      if (artistCompare !== 0) return artistCompare;
-  
-      // Compare by album release year (oldest first); convert to numbers in case they're strings.
-      const aYear = Number(a.releaseYear) || 0;
-      const bYear = Number(b.releaseYear) || 0;
-      if (aYear !== bYear) return aYear - bYear;
-  
-      // Compare by album name as a fallback.
-      const albumCompare = a.albumName.localeCompare(b.albumName, undefined, { sensitivity: "base" });
-      if (albumCompare !== 0) return albumCompare;
-  
-      // Compare by track number (ascending)
-      const aTrackNum = Number(a.trackNumber) || 0;
-      const bTrackNum = Number(b.trackNumber) || 0;
-      return aTrackNum - bTrackNum;
-    });
-  };
-
-  const deduplicateTracks = (data) => {
-    // Assuming track.id is unique:
-    const trackMap = new Map();
-    data.forEach(track => {
-      trackMap.set(track.id, track);
-    });
-    return Array.from(trackMap.values());
-  };
-  
-
-  const fetchTracks = async () => {
+  const fetchArtists = async () => {
     try {
-      const response = await fetch(`${serverUrl}/api/library/tracks`);
+      const response = await fetch(`${serverUrl}/api/library/artists`);
       if (!response.ok) {
-        throw new Error("Server responded with an error");
+        throw new Error("Server error");
       }
       const data = await response.json();
-
-      console.log("Original length:", data.length);
-
-      // Deduplicate the array based on track.id.
-    const deduplicated = deduplicateTracks(data);
-
-    // Now sort the deduplicated array.
-    const sortedData = sortTracks(deduplicated);
-
-    console.log("Original length:", data.length);
-    console.log("After deduplication:", deduplicated.length);
-    console.log("After sorting:", sortedData.length);
-    setTracks(sortedData);
+      setArtists(data);
       setServerFound(true);
+      // Select the first artist by default if none is selected
+      if (data.length > 0 && !selectedArtist) {
+        setSelectedArtist(data[0]);
+      }
     } catch (error) {
-      console.error("Error fetching tracks:", error);
+      console.error("Error fetching artists:", error);
       setServerFound(false);
-      setTracks([]);
+      setArtists([]);
     }
   };
 
-  const handleServerUrlSubmit = (e) => {
-    e.preventDefault();
-    if (customServerUrl) {
-      setServerUrl(customServerUrl);
+  // When selectedArtist changes, fetch the albums for that artist
+  useEffect(() => {
+    if (selectedArtist) {
+      fetchAlbums(selectedArtist);
     }
+  }, [selectedArtist, serverUrl]);
+
+  const fetchAlbums = async (artist) => {
+    try {
+      const response = await fetch(
+        `${serverUrl}/api/library/albums?artist=${encodeURIComponent(artist)}`
+      );
+      if (!response.ok) {
+        throw new Error("Server error");
+      }
+      const data = await response.json();
+      setAlbums(data);
+      // Automatically select the first album if available
+      if (data.length > 0) {
+        setSelectedAlbum(data[0].albumName);
+      } else {
+        setSelectedAlbum(null);
+      }
+    } catch (error) {
+      console.error("Error fetching albums:", error);
+      setAlbums([]);
+      setSelectedAlbum(null);
+    }
+  };
+
+  // Helper: Get the tracks for the selected album from the albums state
+  const getTracksForSelectedAlbum = () => {
+    if (!selectedAlbum) return [];
+    const albumObj = albums.find((a) => a.albumName === selectedAlbum);
+    return albumObj ? albumObj.tracks : [];
+  };
+
+  // Handlers for UI interactions
+  const handleArtistClick = (artist) => {
+    setSelectedArtist(artist);
+    // Reset selected album when the artist changes
+    setSelectedAlbum(null);
+  };
+
+  const handleAlbumClick = (albumName) => {
+    setSelectedAlbum(albumName);
   };
 
   const handleTrackDoubleClick = (trackId) => {
@@ -92,42 +109,28 @@ function App() {
     setPlayingTrackId(trackId);
   };
 
-  const handleScanClick = async () => {
-    try {
-      await fetch(`${serverUrl}/api/library/scan`, { method: "POST" });
-      fetchTracks();
-    } catch (error) {
-      console.error("Error initiating scan:", error);
+  const handleServerUrlSubmit = (e) => {
+    e.preventDefault();
+    if (customServerUrl) {
+      setServerUrl(customServerUrl);
+      // Reset selections when the server URL changes
+      setSelectedArtist(null);
+      setSelectedAlbum(null);
     }
   };
 
-  const currentTrack = tracks.find((t) => t.id === playingTrackId);
-
-
-
-  // Helper function to format the duration from "hh:mm:ss.xxx" to "mm:ss"
-  const formatDuration = (durationStr) => {
-    if (!durationStr) return "N/A";
-    const parts = durationStr.split(":");
-    if (parts.length < 3) return durationStr;
-    const hours = parseInt(parts[0], 10);
-    const minutes = parseInt(parts[1], 10);
-    const seconds = parseFloat(parts[2]);
-    const totalMinutes = hours * 60 + minutes;
-    const wholeSeconds = Math.floor(seconds);
-    const formattedMinutes = totalMinutes.toString().padStart(2, "0");
-    const formattedSeconds = wholeSeconds.toString().padStart(2, "0");
-    return `${formattedMinutes}:${formattedSeconds}`;
-  };
+  // For display: current track list is those from the selected album
+  const currentTracks = getTracksForSelectedAlbum();
 
   return (
-    <Container className="my-4 main-content">
+    <Container className="my-4">
       <Row>
         <Col>
-          <h1 className="mb-4 text-center">Audiarr</h1>
+          <h1 className="text-center">audiarr</h1>
         </Col>
       </Row>
 
+      {/* Server URL configuration, if server is not found */}
       {!serverFound && (
         <Row className="mb-4">
           <Col>
@@ -155,69 +158,107 @@ function App() {
 
       {serverFound && (
         <>
+          {/* Row with Artists and Albums side by side */}
           <Row className="mb-3">
-            <Col xs={12} md={6}>
-              <Button variant="success" onClick={handleScanClick}>
-                Initiate Scan
-              </Button>
+            {/* Left Box: Artists */}
+            <Col md={6}>
+              <Card style={{ height: "300px", overflowY: "auto" }}>
+                <Card.Header>Artists</Card.Header>
+                <ListGroup variant="flush">
+                  {artists.map((artist, index) => (
+                    <ListGroup.Item
+                      key={index}
+                      active={artist === selectedArtist}
+                      onClick={() => handleArtistClick(artist)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {artist}
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              </Card>
+            </Col>
+
+            {/* Right Box: Albums for the selected artist */}
+            <Col md={6}>
+              <Card style={{ height: "300px", overflowY: "auto" }}>
+                <Card.Header>Albums</Card.Header>
+                <ListGroup variant="flush">
+                  {albums.map((album, index) => (
+                    <ListGroup.Item
+                      key={index}
+                      active={album.albumName === selectedAlbum}
+                      onClick={() => handleAlbumClick(album.albumName)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {album.albumName} ({album.releaseYear})
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              </Card>
             </Col>
           </Row>
-          <Row>
+
+          {/* Row with Tracks Table (below Artists and Albums) */}
+          <Row className="mb-3">
             <Col>
-              <h2 className="mb-3">Tracks</h2>
-              {tracks.length === 0 ? (
-                <p>No tracks found. Try initiating a scan.</p>
-              ) : (
-                <div className="d-flex justify-content-center">
-                  <Table striped bordered hover style={{ maxWidth: "90%" }}>
-                    <thead>
-                      <tr>
-                        <th>Song</th>
-                        <th>Time</th>
-                        <th>Artist</th>
-                        <th>Album</th>
-                        <th>Genre</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tracks.map((track) => (
-                        <tr
-                          key={track.id}
-                          onMouseEnter={() => setHoveredTrackId(track.id)}
-                          onMouseLeave={() => setHoveredTrackId(null)}
-                          onDoubleClick={() => handleTrackDoubleClick(track.id)}
-                          style={{ cursor: "pointer" }}
-                          className={
-                            track.id === playingTrackId
-                              ? "table-primary"
-                              : hoveredTrackId === track.id
-                              ? "table-info"
-                              : ""
-                          }
-                          title="Double-click to play"
-                        >
-                          <td>{track.trackTitle}</td>
-                          <td>{formatDuration(track.duration)}</td>
-                          <td>{track.artist}</td>
-                          <td>{track.albumName}</td>
-                          <td>{track.genre}</td>
+              <Card>
+                <Card.Header>Tracks</Card.Header>
+                <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  {currentTracks.length === 0 ? (
+                    <p>No tracks available for this album.</p>
+                  ) : (
+                    <Table striped bordered hover responsive>
+                      <thead>
+                        <tr>
+                          <th>Song</th>
+                          <th>Time</th>
+                          <th>Artist</th>
+                          <th>Album</th>
+                          <th>Genre</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {currentTracks.map((track) => (
+                          <tr
+                            key={track.id}
+                            onDoubleClick={() => handleTrackDoubleClick(track.id)}
+                            style={{ cursor: "pointer" }}
+                            className={
+                              track.id === playingTrackId ? "table-primary" : ""
+                            }
+                            title="Double-click to play"
+                          >
+                            <td>{track.trackTitle}</td>
+                            <td>
+                              {track.duration
+                                ? track.duration.split(".")[0] // Simplified display (hh:mm:ss)
+                                : "N/A"}
+                            </td>
+                            <td>{track.artist}</td>
+                            <td>{track.albumName}</td>
+                            <td>{track.genre}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </Card.Body>
+              </Card>
             </Col>
           </Row>
+
+          {/* Now Playing Bar */}
           {audioSrc && (
             <div className="now-playing-bar">
               <Row>
                 <Col>
                   <Card className="p-3">
                     <Card.Title>Now Playing</Card.Title>
-                    {currentTrack && (
+                    {currentTracks.find((t) => t.id === playingTrackId) && (
                       <Card.Text>
-                        {currentTrack.trackTitle} - {currentTrack.artist}
+                        {currentTracks.find((t) => t.id === playingTrackId).trackTitle} -{" "}
+                        {currentTracks.find((t) => t.id === playingTrackId).artist}
                       </Card.Text>
                     )}
                     <audio controls autoPlay src={audioSrc} className="w-100">
