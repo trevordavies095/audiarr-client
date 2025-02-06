@@ -18,6 +18,9 @@ function App() {
   const [customServerUrl, setCustomServerUrl] = useState("");
   const [serverFound, setServerFound] = useState(true);
 
+  // Server name state
+  const [serverName, setServerName] = useState("Audiarr");
+
   // New state for artists and albums
   const [artists, setArtists] = useState([]);
   const [selectedArtist, setSelectedArtist] = useState(null);
@@ -32,6 +35,34 @@ function App() {
   useEffect(() => {
     fetchArtists();
   }, [serverUrl]);
+
+  // Fetch the server name on component mount
+  useEffect(() => {
+    fetchServerName();
+  }, [serverUrl]);
+
+  const fetchServerName = async () => {
+    try {
+        const response = await fetch(`${serverUrl}/api/settings/server-name`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch server name: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log("API Response:", data); // Log the response
+
+        if (data && data.serverName) {
+            setServerName(data.serverName);
+            document.title = `${data.serverName} - Music Library`;
+        } else {
+            throw new Error("ServerName property missing in response");
+        }
+    } catch (error) {
+        console.error("Error fetching server name:", error);
+        setServerName("Audiarr"); // Fallback to default
+        document.title = "Audiarr - Music Library";
+    }
+};
 
   const fetchArtists = async () => {
     try {
@@ -125,7 +156,7 @@ function App() {
     <Container className="my-4">
       <Row>
         <Col>
-          <h1 className="text-center">audiarr</h1>
+          <h1 className="text-center">{serverName}</h1>
         </Col>
       </Row>
 
