@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Container, Row, Col, Button, Form, ListGroup, Card } from "react-bootstrap";
+import { Container, Row, Col, Button, Form, Table, Card } from "react-bootstrap";
 import "./App.css";
 
 function App() {
@@ -9,11 +9,46 @@ function App() {
   const [serverFound, setServerFound] = useState(true);
   const [customServerUrl, setCustomServerUrl] = useState("");
   const [audioSrc, setAudioSrc] = useState("");
+  const [playingTrackId, setPlayingTrackId] = useState(null);
+  const [hoveredTrackId, setHoveredTrackId] = useState(null);
 
   useEffect(() => {
     fetchTracks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverUrl]);
+
+  const sortTracks = (tracks) => {
+    // Make a shallow copy using slice() so we don't mutate the original array.
+    return tracks.slice().sort((a, b) => {
+      // Compare by artist name (alphabetically, case-insensitive)
+      const artistCompare = a.artist.localeCompare(b.artist, undefined, { sensitivity: "base" });
+      if (artistCompare !== 0) return artistCompare;
+  
+      // Compare by album release year (oldest first); convert to numbers in case they're strings.
+      const aYear = Number(a.releaseYear) || 0;
+      const bYear = Number(b.releaseYear) || 0;
+      if (aYear !== bYear) return aYear - bYear;
+  
+      // Compare by album name as a fallback.
+      const albumCompare = a.albumName.localeCompare(b.albumName, undefined, { sensitivity: "base" });
+      if (albumCompare !== 0) return albumCompare;
+  
+      // Compare by track number (ascending)
+      const aTrackNum = Number(a.trackNumber) || 0;
+      const bTrackNum = Number(b.trackNumber) || 0;
+      return aTrackNum - bTrackNum;
+    });
+  };
+
+  const deduplicateTracks = (data) => {
+    // Assuming track.id is unique:
+    const trackMap = new Map();
+    data.forEach(track => {
+      trackMap.set(track.id, track);
+    });
+    return Array.from(trackMap.values());
+  };
+  
 
   const fetchTracks = async () => {
     try {
@@ -22,7 +57,19 @@ function App() {
         throw new Error("Server responded with an error");
       }
       const data = await response.json();
-      setTracks(data);
+
+      console.log("Original length:", data.length);
+
+      // Deduplicate the array based on track.id.
+    const deduplicated = deduplicateTracks(data);
+
+    // Now sort the deduplicated array.
+    const sortedData = sortTracks(deduplicated);
+
+    console.log("Original length:", data.length);
+    console.log("After deduplication:", deduplicated.length);
+    console.log("After sorting:", sortedData.length);
+    setTracks(sortedData);
       setServerFound(true);
     } catch (error) {
       console.error("Error fetching tracks:", error);
@@ -39,7 +86,10 @@ function App() {
   };
 
   const handleTrackDoubleClick = (trackId) => {
+    // When a row is double-clicked, set the audio source to stream the track,
+    // and mark this track as playing.
     setAudioSrc(`${serverUrl}/api/music/stream/${trackId}`);
+    setPlayingTrackId(trackId);
   };
 
   const handleScanClick = async () => {
@@ -51,13 +101,31 @@ function App() {
     }
   };
 
+
+
+  // Helper function to format the duration from "hh:mm:ss.xxx" to "mm:ss"
+  const formatDuration = (durationStr) => {
+    if (!durationStr) return "N/A";
+    const parts = durationStr.split(":");
+    if (parts.length < 3) return durationStr;
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    const seconds = parseFloat(parts[2]);
+    const totalMinutes = hours * 60 + minutes;
+    const wholeSeconds = Math.floor(seconds);
+    const formattedMinutes = totalMinutes.toString().padStart(2, "0");
+    const formattedSeconds = wholeSeconds.toString().padStart(2, "0");
+    return `${formattedMinutes}:${formattedSeconds}`;
+  };
+
   return (
-    <Container className="my-4">
+    <Container className="my-4 main-content">
       <Row>
         <Col>
-          <h1 className="mb-4">Music Library Client</h1>
+          <h1 className="mb-4 text-center">Music Library Client</h1>
         </Col>
       </Row>
+
       {!serverFound && (
         <Row className="mb-4">
           <Col>
@@ -82,6 +150,7 @@ function App() {
           </Col>
         </Row>
       )}
+
       {serverFound && (
         <>
           <Row className="mb-3">
@@ -93,35 +162,64 @@ function App() {
           </Row>
           <Row>
             <Col>
-              <h2>Tracks</h2>
+              <h2 className="mb-3">Tracks</h2>
               {tracks.length === 0 ? (
                 <p>No tracks found. Try initiating a scan.</p>
               ) : (
-                <ListGroup>
-                  {tracks.map((track) => (
-                    <ListGroup.Item
-                      key={track.id}
-                      action
-                      onDoubleClick={() => handleTrackDoubleClick(track.id)}
-                    >
-                      {track.trackTitle} by {track.artist}
-                    </ListGroup.Item>
-                  ))}
-                </ListGroup>
+                <div className="d-flex justify-content-center">
+                  <Table striped bordered hover style={{ maxWidth: "90%" }}>
+                    <thead>
+                      <tr>
+                        <th>Song</th>
+                        <th>Time</th>
+                        <th>Artist</th>
+                        <th>Album</th>
+                        <th>Genre</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tracks.map((track) => (
+                        <tr
+                          key={track.id}
+                          onMouseEnter={() => setHoveredTrackId(track.id)}
+                          onMouseLeave={() => setHoveredTrackId(null)}
+                          onDoubleClick={() => handleTrackDoubleClick(track.id)}
+                          style={{ cursor: "pointer" }}
+                          className={
+                            track.id === playingTrackId
+                              ? "table-primary"
+                              : hoveredTrackId === track.id
+                              ? "table-info"
+                              : ""
+                          }
+                          title="Double-click to play"
+                        >
+                          <td>{track.trackTitle}</td>
+                          <td>{formatDuration(track.duration)}</td>
+                          <td>{track.artist}</td>
+                          <td>{track.albumName}</td>
+                          <td>{track.genre}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
               )}
             </Col>
           </Row>
           {audioSrc && (
-            <Row className="mt-4">
-              <Col>
-                <Card className="p-3">
-                  <Card.Title>Now Playing</Card.Title>
-                  <audio controls autoPlay src={audioSrc} className="w-100">
-                    Your browser does not support the audio element.
-                  </audio>
-                </Card>
-              </Col>
-            </Row>
+            <div className="now-playing-bar">
+              <Row>
+                <Col>
+                  <Card className="p-3">
+                    <Card.Title>Now Playing</Card.Title>
+                    <audio controls autoPlay src={audioSrc} className="w-100">
+                      Your browser does not support the audio element.
+                    </audio>
+                  </Card>
+                </Col>
+              </Row>
+            </div>
           )}
         </>
       )}

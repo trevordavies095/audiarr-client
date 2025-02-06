@@ -36,3 +36,18 @@
     transform: rotate(360deg);
   }
 }
+
+.now-playing-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1030; /* Adjust as needed to ensure it stays above other content */
+  background-color: #fff; /* Or your preferred background color */
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+  padding: 1rem;
+}
+
+.main-content {
+  padding-bottom: 120px; /* Adjust based on the height of your now-playing bar */
+}
