@@ -101,6 +101,8 @@ function App() {
     }
   };
 
+  const currentTrack = tracks.find((t) => t.id === playingTrackId);
+
 
 
   // Helper function to format the duration from "hh:mm:ss.xxx" to "mm:ss"
@@ -213,6 +215,11 @@ function App() {
                 <Col>
                   <Card className="p-3">
                     <Card.Title>Now Playing</Card.Title>
+                    {currentTrack && (
+                      <Card.Text>
+                        {currentTrack.trackTitle} - {currentTrack.artist}
+                      </Card.Text>
+                    )}
                     <audio controls autoPlay src={audioSrc} className="w-100">
                       Your browser does not support the audio element.
                     </audio>
