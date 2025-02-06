@@ -124,7 +124,7 @@ function App() {
     <Container className="my-4 main-content">
       <Row>
         <Col>
-          <h1 className="mb-4 text-center">Music Library Client</h1>
+          <h1 className="mb-4 text-center">Audiarr</h1>
         </Col>
       </Row>
 
