@@ -1,0 +1,8 @@
+name: audiarr-client
+services:
+    audiarr-client:
+        ports:
+            - 2934:80
+        container_name: audiarr-client
+        image: audiarr-client
+
