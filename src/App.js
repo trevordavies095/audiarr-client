@@ -29,10 +29,17 @@ function App() {
   const [playingTrackId, setPlayingTrackId] = useState(null);
 
   // Fetch artists & server name on load
+
+    // Fetch artists on component mount or when serverUrl changes
+    useEffect(() => {
+      fetchArtists();
+    }, [serverUrl]);
+  
+
+  // Fetch the server name on component mount
   useEffect(() => {
-    fetchArtists();
     fetchServerName();
-  }, []);
+  }, [serverUrl]);
 
   const fetchServerName = async () => {
     try {
