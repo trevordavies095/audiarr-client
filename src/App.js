@@ -17,66 +17,50 @@ function App() {
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [customServerUrl, setCustomServerUrl] = useState("");
   const [serverFound, setServerFound] = useState(true);
-
-  // Server name state
   const [serverName, setServerName] = useState("Audiarr");
 
-  // New state for artists and albums
   const [artists, setArtists] = useState([]);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [albums, setAlbums] = useState([]);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [tracks, setTracks] = useState([]);
 
-  // For playback tracking
   const [audioSrc, setAudioSrc] = useState("");
   const [playingTrackId, setPlayingTrackId] = useState(null);
 
-  // Fetch artists on component mount or when serverUrl changes
+  // Fetch artists & server name on load
   useEffect(() => {
     fetchArtists();
-  }, [serverUrl]);
-
-  // Fetch the server name on component mount
-  useEffect(() => {
     fetchServerName();
-  }, [serverUrl]);
+  }, []);
 
   const fetchServerName = async () => {
     try {
-        const response = await fetch(`${serverUrl}/api/settings/server-name`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch server name: ${response.status} ${response.statusText}`);
-        }
+      const response = await fetch(`${serverUrl}/api/settings/server-name`);
+      if (!response.ok) throw new Error("Failed to fetch server name");
 
-        const data = await response.json();
-        console.log("API Response:", data); // Log the response
-
-        if (data && data.serverName) {
-            setServerName(data.serverName);
-            document.title = `${data.serverName} - Music Library`;
-        } else {
-            throw new Error("ServerName property missing in response");
-        }
+      const data = await response.json();
+      if (data?.serverName) {
+        setServerName(data.serverName);
+        document.title = `${data.serverName} - Music Library`;
+      } else {
+        throw new Error("ServerName missing in response");
+      }
     } catch (error) {
-        console.error("Error fetching server name:", error);
-        setServerName("Audiarr"); // Fallback to default
-        document.title = "Audiarr - Music Library";
+      console.error("Error fetching server name:", error);
+      setServerName("Audiarr");
+      document.title = "Audiarr - Music Library";
     }
-};
+  };
 
   const fetchArtists = async () => {
     try {
       const response = await fetch(`${serverUrl}/api/library/artists`);
-      if (!response.ok) {
-        throw new Error("Server error");
-      }
+      if (!response.ok) throw new Error("Server error");
+
       const data = await response.json();
       setArtists(data);
       setServerFound(true);
-      // Select the first artist by default if none is selected
-      if (data.length > 0 && !selectedArtist) {
-        setSelectedArtist(data[0]);
-      }
     } catch (error) {
       console.error("Error fetching artists:", error);
       setServerFound(false);
@@ -84,29 +68,25 @@ function App() {
     }
   };
 
-  // When selectedArtist changes, fetch the albums for that artist
-  useEffect(() => {
-    if (selectedArtist) {
-      fetchAlbums(selectedArtist);
-    }
-  }, [selectedArtist, serverUrl]);
+  const handleArtistClick = (artist) => {
+    if (selectedArtist?.id === artist.id) return; // Prevent redundant re-fetch
 
-  const fetchAlbums = async (artist) => {
+    setSelectedArtist(artist);
+    setSelectedAlbum(null);
+    setAlbums([]); // Reset albums
+    setTracks([]); // Reset tracks
+
+    fetchAlbums(artist.id);
+  };
+
+  const fetchAlbums = async (artistId) => {
     try {
-      const response = await fetch(
-        `${serverUrl}/api/library/albums?artist=${encodeURIComponent(artist)}`
-      );
-      if (!response.ok) {
-        throw new Error("Server error");
-      }
+      const response = await fetch(`${serverUrl}/api/library/albums?artistId=${artistId}`);
+      if (!response.ok) throw new Error("Server error");
+
       const data = await response.json();
-      setAlbums(data);
-      // Automatically select the first album if available
-      if (data.length > 0) {
-        setSelectedAlbum(data[0].albumName);
-      } else {
-        setSelectedAlbum(null);
-      }
+      setAlbums(data); // ✅ Only loads albums for selected artist
+      setSelectedAlbum(null); // Reset album selection
     } catch (error) {
       console.error("Error fetching albums:", error);
       setAlbums([]);
@@ -114,43 +94,44 @@ function App() {
     }
   };
 
-  // Helper: Get the tracks for the selected album from the albums state
-  const getTracksForSelectedAlbum = () => {
-    if (!selectedAlbum) return [];
-    const albumObj = albums.find((a) => a.albumName === selectedAlbum);
-    return albumObj ? albumObj.tracks : [];
+  const handleAlbumClick = (album) => {
+    if (selectedAlbum?.albumId === album.albumId) return; // Prevent redundant re-fetch
+
+    setSelectedAlbum(album);
+    setTracks([]); // Reset tracks
+
+    fetchTracks(album.albumId);
   };
 
-  // Handlers for UI interactions
-  const handleArtistClick = (artist) => {
-    setSelectedArtist(artist);
-    // Reset selected album when the artist changes
-    setSelectedAlbum(null);
-  };
+  const fetchTracks = async (albumId) => {
+    try {
+      const response = await fetch(`${serverUrl}/api/library/tracks?albumId=${albumId}`);
+      if (!response.ok) throw new Error("Server error");
 
-  const handleAlbumClick = (albumName) => {
-    setSelectedAlbum(albumName);
+      const data = await response.json();
+      setTracks(data.tracks);
+    } catch (error) {
+      console.error("Error fetching tracks:", error);
+      setTracks([]);
+    }
   };
 
   const handleTrackDoubleClick = (trackId) => {
-    // When a row is double-clicked, set the audio source to stream the track,
-    // and mark this track as playing.
-    setAudioSrc(`${serverUrl}/api/music/stream/${trackId}`);
+    const streamUrl = `${serverUrl}/api/music/stream/${trackId}`;
+    setAudioSrc(streamUrl);
     setPlayingTrackId(trackId);
-  };
+};
+
 
   const handleServerUrlSubmit = (e) => {
     e.preventDefault();
     if (customServerUrl) {
       setServerUrl(customServerUrl);
-      // Reset selections when the server URL changes
       setSelectedArtist(null);
       setSelectedAlbum(null);
+      setTracks([]);
     }
   };
-
-  // For display: current track list is those from the selected album
-  const currentTracks = getTracksForSelectedAlbum();
 
   return (
     <Container className="my-4">
@@ -160,7 +141,6 @@ function App() {
         </Col>
       </Row>
 
-      {/* Server URL configuration, if server is not found */}
       {!serverFound && (
         <Row className="mb-4">
           <Col>
@@ -188,37 +168,34 @@ function App() {
 
       {serverFound && (
         <>
-          {/* Row with Artists and Albums side by side */}
           <Row className="mb-3">
-            {/* Left Box: Artists */}
             <Col md={6}>
               <Card style={{ height: "300px", overflowY: "auto" }}>
                 <Card.Header>Artists</Card.Header>
                 <ListGroup variant="flush">
-                  {artists.map((artist, index) => (
+                  {artists.map((artist) => (
                     <ListGroup.Item
-                      key={index}
-                      active={artist === selectedArtist}
+                      key={artist.id}
+                      active={selectedArtist?.id === artist.id} 
                       onClick={() => handleArtistClick(artist)}
                       style={{ cursor: "pointer" }}
                     >
-                      {artist}
+                      {artist.name}
                     </ListGroup.Item>
                   ))}
                 </ListGroup>
               </Card>
             </Col>
 
-            {/* Right Box: Albums for the selected artist */}
             <Col md={6}>
               <Card style={{ height: "300px", overflowY: "auto" }}>
                 <Card.Header>Albums</Card.Header>
                 <ListGroup variant="flush">
-                  {albums.map((album, index) => (
+                  {albums.map((album) => (
                     <ListGroup.Item
-                      key={index}
-                      active={album.albumName === selectedAlbum}
-                      onClick={() => handleAlbumClick(album.albumName)}
+                      key={album.albumId}
+                      active={selectedAlbum?.albumId === album.albumId}
+                      onClick={() => handleAlbumClick(album)}
                       style={{ cursor: "pointer" }}
                     >
                       {album.albumName} ({album.releaseYear})
@@ -229,13 +206,12 @@ function App() {
             </Col>
           </Row>
 
-          {/* Row with Tracks Table (below Artists and Albums) */}
           <Row className="mb-3">
             <Col>
               <Card>
                 <Card.Header>Tracks</Card.Header>
                 <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
-                  {currentTracks.length === 0 ? (
+                  {tracks.length === 0 ? (
                     <p>No tracks available for this album.</p>
                   ) : (
                     <Table striped bordered hover responsive>
@@ -249,25 +225,19 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {currentTracks.map((track) => (
+                        {tracks.map((track) => (
                           <tr
                             key={track.id}
                             onDoubleClick={() => handleTrackDoubleClick(track.id)}
                             style={{ cursor: "pointer" }}
-                            className={
-                              track.id === playingTrackId ? "table-primary" : ""
-                            }
+                            className={track.id === playingTrackId ? "table-primary" : ""}
                             title="Double-click to play"
                           >
                             <td>{track.trackTitle}</td>
-                            <td>
-                              {track.duration
-                                ? track.duration.split(".")[0] // Simplified display (hh:mm:ss)
-                                : "N/A"}
-                            </td>
+                            <td>{track.duration ? track.duration.split(".")[0] : "N/A"}</td>
                             <td>{track.artist}</td>
-                            <td>{track.albumName}</td>
-                            <td>{track.genre}</td>
+                            <td>{selectedAlbum?.albumName || "Unknown"}</td>
+                            <td>{selectedAlbum?.genre || "Unknown"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -277,28 +247,27 @@ function App() {
               </Card>
             </Col>
           </Row>
-
           {/* Now Playing Bar */}
-          {audioSrc && (
+            {audioSrc && (
             <div className="now-playing-bar">
-              <Row>
+                <Row>
                 <Col>
-                  <Card className="p-3">
+                    <Card className="p-3">
                     <Card.Title>Now Playing</Card.Title>
-                    {currentTracks.find((t) => t.id === playingTrackId) && (
-                      <Card.Text>
-                        {currentTracks.find((t) => t.id === playingTrackId).trackTitle} -{" "}
-                        {currentTracks.find((t) => t.id === playingTrackId).artist}
-                      </Card.Text>
+                    {tracks.find((t) => t.id === playingTrackId) && (
+                        <Card.Text>
+                        {tracks.find((t) => t.id === playingTrackId).trackTitle} -{" "}
+                        {tracks.find((t) => t.id === playingTrackId).artist}
+                        </Card.Text>
                     )}
-                    <audio controls autoPlay src={audioSrc} className="w-100">
-                      Your browser does not support the audio element.
+                    <audio key={playingTrackId} controls autoPlay src={audioSrc} className="w-100">
+                        Your browser does not support the audio element.
                     </audio>
-                  </Card>
+                    </Card>
                 </Col>
-              </Row>
+                </Row>
             </div>
-          )}
+            )}
         </>
       )}
     </Container>
